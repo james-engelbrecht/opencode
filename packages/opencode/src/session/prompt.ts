@@ -99,6 +99,25 @@ function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   return part.state.status === "error" && part.state.metadata?.interrupted === true
 }
 
+function dropUnfinishedTailAssistant(msgs: SessionV1.WithParts[]) {
+  // Aborted turns leave partial assistant messages with no finish reason (or
+  // finish "unknown"). Replaying them at the end of a request makes providers
+  // that validate turn-taking (e.g. Ollama's OpenAI-compatible API) reject it
+  // with "Cannot have 2 or more assistant messages at the end of the list",
+  // and models degrade badly when history ends with a half-finished turn:
+  // replies come back empty and the run loop exits silently. Completed
+  // assistants (finish "stop"/"tool-calls") stop the walk, so only the
+  // unfinished tail is trimmed - stored messages are never modified.
+  const result = [...msgs]
+  while (result.length > 0) {
+    const last = result[result.length - 1]
+    if (last.info.role !== "assistant") break
+    if (last.info.finish && last.info.finish !== "unknown") break
+    result.pop()
+  }
+  return result
+}
+
 export interface Interface {
   readonly cancel: (sessionID: SessionID) => Effect.Effect<void>
   readonly prompt: (input: PromptInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
@@ -1092,6 +1111,7 @@ const layer = Layer.effect(
           let msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
             Effect.provideService(Database.Service, database),
           )
+          msgs = dropUnfinishedTailAssistant(msgs)
 
           const { user: lastUser, assistant: lastAssistant, finished: lastFinished, tasks } = MessageV2.latest(msgs)
 
@@ -1278,7 +1298,12 @@ const layer = Layer.effect(
               system,
               messages: [
                 ...modelMsgs,
-                ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }] : []),
+                // Never stack the max-steps prompt on an assistant message:
+                // providers like Ollama reject requests ending with two or
+                // more consecutive assistant messages.
+                ...(isLastStep && modelMsgs.at(-1)?.role !== "assistant"
+                  ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }]
+                  : []),
               ],
               tools,
               model,
