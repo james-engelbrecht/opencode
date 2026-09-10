@@ -39,47 +39,54 @@ import { ToolOutputStore } from "./tool-output-store"
 
 export { LocationServiceMap } from "./location-service-map"
 
-export const locationServices = LayerNode.group([
-  Location.node,
-  Policy.node,
-  Config.node,
-  AgentV2.node,
-  CommandV2.node,
-  Reference.node,
-  Integration.node,
-  Catalog.node,
-  AISDK.node,
-  PluginV2.node,
-  PluginInternal.node,
-  ProjectCopy.node,
-  ProjectCopy.refreshNode,
-  FileSystemSearch.node,
-  FileSystem.node,
-  Watcher.node,
-  Pty.node,
-  SkillV2.node,
-  SystemContextRegistry.node,
-  SystemContextBuiltIns.node,
-  LocationMutation.node,
-  FileMutation.node,
-  PermissionV2.node,
-  ToolOutputStore.node,
-  ToolRegistry.node,
-  ToolRegistry.toolsNode,
-  Image.node,
-  SkillGuidance.node,
-  ReferenceGuidance.node,
-  SessionTodo.node,
-  QuestionV2.node,
-  ReadToolFileSystem.node,
-  BuiltInTools.node,
-  SessionRunnerModel.node,
-  Snapshot.node,
-  SessionRunnerLLM.node,
-])
+// These modules participate in import cycles. When bundled into the compiled
+// binary, chunk evaluation order can run this module before a cyclic
+// dependency finishes initializing, leaving its `node` export undefined.
+// Build the group through a function so the `.node` properties are read when
+// the graph is first consumed, after every module has been initialized.
+export function locationServices() {
+  return LayerNode.group([
+    Location.node,
+    Policy.node,
+    Config.node,
+    AgentV2.node,
+    CommandV2.node,
+    Reference.node,
+    Integration.node,
+    Catalog.node,
+    AISDK.node,
+    PluginV2.node,
+    PluginInternal.node,
+    ProjectCopy.node,
+    ProjectCopy.refreshNode,
+    FileSystemSearch.node,
+    FileSystem.node,
+    Watcher.node,
+    Pty.node,
+    SkillV2.node,
+    SystemContextRegistry.node,
+    SystemContextBuiltIns.node,
+    LocationMutation.node,
+    FileMutation.node,
+    PermissionV2.node,
+    ToolOutputStore.node,
+    ToolRegistry.node,
+    ToolRegistry.toolsNode,
+    Image.node,
+    SkillGuidance.node,
+    ReferenceGuidance.node,
+    SessionTodo.node,
+    QuestionV2.node,
+    ReadToolFileSystem.node,
+    BuiltInTools.node,
+    SessionRunnerModel.node,
+    Snapshot.node,
+    SessionRunnerLLM.node,
+  ])
+}
 
-export type LocationServices = LayerNode.Output<typeof locationServices>
-export type LocationError = LayerNode.Error<typeof locationServices>
+export type LocationServices = LayerNode.Output<ReturnType<typeof locationServices>>
+export type LocationError = LayerNode.Error<ReturnType<typeof locationServices>>
 
 export function buildLocationServiceMap(
   replacements: LayerNode.Replacements = [],
@@ -93,7 +100,7 @@ export function buildLocationServiceMap(
         // introduce new tagged dependencies (Location.boundNode depends on
         // Project), and the hoist walk is the only pass that can still slice
         // those back out.
-        const location = LayerNode.hoist(locationServices, Node.tags.values.global, allReplacements)
+        const location = LayerNode.hoist(locationServices(), Node.tags.values.global, allReplacements)
 
         return LayerNode.compile(location.node).pipe(
           Layer.fresh,

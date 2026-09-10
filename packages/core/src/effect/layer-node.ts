@@ -236,6 +236,14 @@ export function hoist<A, E, T extends Tag, const Items extends Replacements = re
       if (node.kind === "unbound") {
         return node
       }
+      if (process.env.LAYER_DEBUG) {
+        const bad = node.dependencies.findIndex((dep) => dep === undefined)
+        if (bad >= 0)
+          console.error(
+            `LAYER_DEBUG: node "${node.name}" has undefined dependency at index ${bad}`,
+            JSON.stringify(node.dependencies.map((dep: any) => dep?.name ?? null)),
+          )
+      }
       return { ...node, dependencies: node.dependencies.map(context.visit) }
     },
     { resolve: (node) => replacementMap.get(node.name) ?? node },
